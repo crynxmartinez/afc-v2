@@ -74,7 +74,10 @@ export default function SubmitEntryPage() {
   }, [contestId])
 
   const fetchContest = async () => {
+    if (!contestId) return
+    
     try {
+      // @ts-ignore - Supabase types not generated
       const { data, error } = await supabase
         .from('contests')
         .select('*')
@@ -86,6 +89,7 @@ export default function SubmitEntryPage() {
 
       // Check if user already submitted
       if (user) {
+        // @ts-ignore - Supabase types not generated
         const { data: existingEntry } = await supabase
           .from('entries')
           .select('id')
@@ -152,6 +156,11 @@ export default function SubmitEntryPage() {
 
     setIsSubmitting(true)
     try {
+      console.log('=== DEBUG: Entry Submission ===')
+      console.log('User:', user)
+      console.log('Contest:', contest)
+      console.log('Phase Files:', phaseFiles)
+
       // Upload images
       const timestamp = Date.now()
       const uploadedUrls: { [key: number]: string | null } = {}
@@ -160,35 +169,51 @@ export default function SubmitEntryPage() {
         const file = phaseFiles[phaseNum]
         if (file) {
           const path = `${user.id}/${contest.id}/${timestamp}_phase${phaseNum}.${file.name.split('.').pop()}`
+          console.log(`Uploading phase ${phaseNum} to:`, path)
           uploadedUrls[phaseNum] = await uploadImage(file, path)
+          console.log(`Phase ${phaseNum} uploaded:`, uploadedUrls[phaseNum])
         } else {
           uploadedUrls[phaseNum] = null
         }
       }
 
+      console.log('All uploaded URLs:', uploadedUrls)
+
       // Create entry
-      // @ts-ignore - Supabase types not generated
-      const { error } = await supabase
+      const entryData = {
+        contest_id: contest.id,
+        user_id: user.id,
+        title: title || null,
+        description: description || null,
+        phase_1_url: uploadedUrls[1],
+        phase_2_url: uploadedUrls[2],
+        phase_3_url: uploadedUrls[3],
+        phase_4_url: uploadedUrls[4],
+        status: 'pending',
+      }
+
+      console.log('Entry data to insert:', entryData)
+
+      const { data, error } = await supabase
         .from('entries')
-        .insert({
-          contest_id: contest.id,
-          user_id: user.id,
-          title: title || null,
-          description: description || null,
-          phase_1_url: uploadedUrls[1],
-          phase_2_url: uploadedUrls[2],
-          phase_3_url: uploadedUrls[3],
-          phase_4_url: uploadedUrls[4],
-          status: 'pending',
-        })
+        // @ts-ignore - Supabase types not generated
+        .insert(entryData as any)
+        .select()
+
+      console.log('Insert response - Data:', data)
+      console.log('Insert response - Error:', error)
 
       if (error) throw error
 
+      if (!data || data.length === 0) {
+        throw new Error('Insert failed - no data returned (possibly RLS blocked)')
+      }
+
       toast.success('Entry submitted!', 'Your entry is pending review.')
       navigate(`/contest/${contest.id}`)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting entry:', error)
-      toast.error('Error', 'Failed to submit entry. Please try again.')
+      toast.error('Error', error?.message || 'Failed to submit entry. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
