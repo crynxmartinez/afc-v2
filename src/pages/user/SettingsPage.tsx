@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { User, Lock, Bell, Globe, Instagram, Twitter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -7,11 +8,13 @@ import Card, { CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import Avatar from '@/components/ui/Avatar'
+import { ConfirmModal } from '@/components/ui/Modal'
 
 type Tab = 'profile' | 'account' | 'notifications'
 
 export default function SettingsPage() {
-  const { user, updateProfile } = useAuthStore()
+  const navigate = useNavigate()
+  const { user, refreshUser, logout } = useAuthStore()
   const toast = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const [isLoading, setIsLoading] = useState(false)
@@ -25,12 +28,28 @@ export default function SettingsPage() {
   const [twitterUrl, setTwitterUrl] = useState(user?.twitter_url || '')
   const [availableForWork, setAvailableForWork] = useState(user?.available_for_work || false)
 
+  // Account state
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Notification state
+  const [notifyReactions, setNotifyReactions] = useState(user?.notification_reactions ?? true)
+  const [notifyComments, setNotifyComments] = useState(user?.notification_comments ?? true)
+  const [notifyFollows, setNotifyFollows] = useState(user?.notification_follows ?? true)
+  const [notifyContests, setNotifyContests] = useState(user?.notification_contests ?? true)
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false)
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
 
     setIsLoading(true)
     try {
+      // @ts-ignore - Supabase types not generated
       const { error } = await supabase
         .from('users')
         .update({
@@ -46,13 +65,103 @@ export default function SettingsPage() {
 
       if (error) throw error
 
-      await updateProfile()
+      await refreshUser()
       toast.success('Profile updated', 'Your profile has been saved.')
     } catch (error) {
       console.error('Error updating profile:', error)
       toast.error('Error', 'Failed to update profile.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast.error('Error', 'Please fill in all password fields.')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('Error', 'Passwords do not match.')
+      return
+    }
+
+    if (newPassword.length < 6) {
+      toast.error('Error', 'Password must be at least 6 characters.')
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+
+      if (error) throw error
+
+      toast.success('Password changed', 'Your password has been updated.')
+      setShowPasswordModal(false)
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      console.error('Error changing password:', error)
+      toast.error('Error', 'Failed to change password.')
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!user) return
+
+    setIsDeleting(true)
+    try {
+      // Delete user data from public.users (cascade will handle related data)
+      const { error: deleteError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', user.id)
+
+      if (deleteError) throw deleteError
+
+      // Sign out
+      await logout()
+      toast.success('Account deleted', 'Your account has been permanently deleted.')
+      navigate('/')
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      toast.error('Error', 'Failed to delete account.')
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+    }
+  }
+
+  const handleSaveNotifications = async () => {
+    if (!user) return
+
+    setIsSavingNotifications(true)
+    try {
+      // @ts-ignore - Supabase types not generated
+      const { error } = await supabase
+        .from('users')
+        .update({
+          notification_reactions: notifyReactions,
+          notification_comments: notifyComments,
+          notification_follows: notifyFollows,
+          notification_contests: notifyContests,
+        })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      await refreshUser()
+      toast.success('Notifications updated', 'Your preferences have been saved.')
+    } catch (error) {
+      console.error('Error saving notifications:', error)
+      toast.error('Error', 'Failed to save notification preferences.')
+    } finally {
+      setIsSavingNotifications(false)
     }
   }
 
@@ -194,7 +303,7 @@ export default function SettingsPage() {
 
                   <div>
                     <h3 className="font-medium text-white mb-2">Password</h3>
-                    <Button variant="secondary" size="sm">
+                    <Button variant="secondary" size="sm" onClick={() => setShowPasswordModal(true)}>
                       Change Password
                     </Button>
                   </div>
@@ -204,7 +313,7 @@ export default function SettingsPage() {
                     <p className="text-dark-400 text-sm mb-4">
                       Once you delete your account, there is no going back.
                     </p>
-                    <Button variant="danger" size="sm">
+                    <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
                       Delete Account
                     </Button>
                   </div>
@@ -220,28 +329,107 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[
-                    { label: 'New reactions on your entries', key: 'reactions' },
-                    { label: 'New comments on your entries', key: 'comments' },
-                    { label: 'New followers', key: 'followers' },
-                    { label: 'Contest updates', key: 'contests' },
-                    { label: 'Winner announcements', key: 'winners' },
-                  ].map((item) => (
-                    <label key={item.key} className="flex items-center justify-between cursor-pointer">
-                      <span className="text-dark-300">{item.label}</span>
-                      <input
-                        type="checkbox"
-                        defaultChecked
-                        className="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
-                      />
-                    </label>
-                  ))}
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-dark-300">New reactions on your entries</span>
+                    <input
+                      type="checkbox"
+                      checked={notifyReactions}
+                      onChange={(e) => setNotifyReactions(e.target.checked)}
+                      className="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-dark-300">New comments on your entries</span>
+                    <input
+                      type="checkbox"
+                      checked={notifyComments}
+                      onChange={(e) => setNotifyComments(e.target.checked)}
+                      className="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-dark-300">New followers</span>
+                    <input
+                      type="checkbox"
+                      checked={notifyFollows}
+                      onChange={(e) => setNotifyFollows(e.target.checked)}
+                      className="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-dark-300">Contest updates</span>
+                    <input
+                      type="checkbox"
+                      checked={notifyContests}
+                      onChange={(e) => setNotifyContests(e.target.checked)}
+                      className="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
+                    />
+                  </label>
+                  
+                  <div className="flex justify-end pt-4">
+                    <Button onClick={handleSaveNotifications} isLoading={isSavingNotifications}>
+                      Save Preferences
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Input
+                  label="New Password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                />
+                <Input
+                  label="Confirm Password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                />
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="ghost" onClick={() => {
+                    setShowPasswordModal(false)
+                    setNewPassword('')
+                    setConfirmPassword('')
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleChangePassword} isLoading={isChangingPassword}>
+                    Change Password
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Account Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteAccount}
+        title="Delete Account"
+        message="Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost."
+        confirmText="Delete Account"
+        isLoading={isDeleting}
+        variant="danger"
+      />
     </div>
   )
 }
