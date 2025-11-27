@@ -1,60 +1,51 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Save, Calendar, Trophy, DollarSign, Image } from 'lucide-react'
+import { ArrowLeft, Save, Calendar, Trophy, Image, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/authStore'
 import { useToast } from '@/stores/uiStore'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { PageSpinner } from '@/components/ui/Spinner'
 
+// Categories must match database constraint
 const CATEGORIES = [
-  'Photography',
-  'Digital Art',
-  'Illustration',
-  'Graphic Design',
-  'UI/UX Design',
-  '3D Art',
-  'Animation',
-  'Mixed Media',
-  'Other'
+  { value: 'art', label: 'Art / Digital Art' },
+  { value: 'cosplay', label: 'Cosplay' },
+  { value: 'photography', label: 'Photography' },
+  { value: 'music', label: 'Music' },
+  { value: 'video', label: 'Video' }
 ]
 
 interface ContestForm {
   title: string
   description: string
   category: string
-  cover_image_url: string
+  thumbnail_url: string
   start_date: string
   end_date: string
-  prize_pool: number
-  first_place_prize: number
-  second_place_prize: number
-  third_place_prize: number
-  max_entries_per_user: number
-  submission_guidelines: string
-  judging_criteria: string
+  has_sponsor: boolean
+  sponsor_name: string
+  sponsor_logo_url: string
 }
 
 const defaultForm: ContestForm = {
   title: '',
   description: '',
-  category: 'Photography',
-  cover_image_url: '',
+  category: 'art',
+  thumbnail_url: '',
   start_date: '',
   end_date: '',
-  prize_pool: 0,
-  first_place_prize: 0,
-  second_place_prize: 0,
-  third_place_prize: 0,
-  max_entries_per_user: 1,
-  submission_guidelines: '',
-  judging_criteria: ''
+  has_sponsor: false,
+  sponsor_name: '',
+  sponsor_logo_url: ''
 }
 
 export default function AdminContestFormPage() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const { user } = useAuthStore()
   const toast = useToast()
   const isEditing = Boolean(id)
 
@@ -80,22 +71,17 @@ export default function AdminContestFormPage() {
       if (error) throw error
 
       if (data) {
-        // @ts-ignore - Supabase types not generated
         const d = data as any
         setForm({
           title: d.title || '',
           description: d.description || '',
-          category: d.category || 'Photography',
-          cover_image_url: d.cover_image_url || '',
+          category: d.category || 'art',
+          thumbnail_url: d.thumbnail_url || '',
           start_date: d.start_date ? d.start_date.slice(0, 16) : '',
           end_date: d.end_date ? d.end_date.slice(0, 16) : '',
-          prize_pool: d.prize_pool || 0,
-          first_place_prize: d.first_place_prize || 0,
-          second_place_prize: d.second_place_prize || 0,
-          third_place_prize: d.third_place_prize || 0,
-          max_entries_per_user: d.max_entries_per_user || 1,
-          submission_guidelines: d.submission_guidelines || '',
-          judging_criteria: d.judging_criteria || ''
+          has_sponsor: d.has_sponsor || false,
+          sponsor_name: d.sponsor_name || '',
+          sponsor_logo_url: d.sponsor_logo_url || ''
         })
       }
     } catch (error) {
@@ -109,10 +95,12 @@ export default function AdminContestFormPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
-    setForm(prev => ({
-      ...prev,
-      [name]: type === 'number' ? Number(value) : value
-    }))
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked
+      setForm(prev => ({ ...prev, [name]: checked }))
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,38 +111,40 @@ export default function AdminContestFormPage() {
       return
     }
 
+    if (new Date(form.end_date) <= new Date(form.start_date)) {
+      toast.error('End date must be after start date')
+      return
+    }
+
     setIsSaving(true)
 
     try {
       const contestData = {
         title: form.title,
-        description: form.description,
+        description: form.description || null,
         category: form.category,
-        cover_image_url: form.cover_image_url || null,
+        thumbnail_url: form.thumbnail_url || null,
         start_date: new Date(form.start_date).toISOString(),
         end_date: new Date(form.end_date).toISOString(),
-        prize_pool: form.prize_pool,
-        first_place_prize: form.first_place_prize,
-        second_place_prize: form.second_place_prize,
-        third_place_prize: form.third_place_prize,
-        max_entries_per_user: form.max_entries_per_user,
-        submission_guidelines: form.submission_guidelines || null,
-        judging_criteria: form.judging_criteria || null
+        has_sponsor: form.has_sponsor,
+        sponsor_name: form.has_sponsor ? form.sponsor_name : null,
+        sponsor_logo_url: form.has_sponsor ? form.sponsor_logo_url : null,
+        created_by: user?.id
       }
 
       if (isEditing && id) {
+        // @ts-ignore - Supabase types not generated
         const { error } = await supabase
           .from('contests')
-          // @ts-ignore - Supabase types not generated
           .update(contestData)
           .eq('id', id)
 
         if (error) throw error
         toast.success('Contest updated successfully')
       } else {
+        // @ts-ignore - Supabase types not generated
         const { error } = await supabase
           .from('contests')
-          // @ts-ignore - Supabase types not generated
           .insert(contestData)
 
         if (error) throw error
@@ -162,9 +152,9 @@ export default function AdminContestFormPage() {
       }
 
       navigate('/admin/contests')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving contest:', error)
-      toast.error('Failed to save contest')
+      toast.error(error?.message || 'Failed to save contest')
     } finally {
       setIsSaving(false)
     }
@@ -220,53 +210,42 @@ export default function AdminContestFormPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-dark-300 mb-1">
-                  Category *
-                </label>
-                <select
-                  name="category"
-                  value={form.category}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 bg-dark-800 border border-dark-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              <Input
-                label="Max Entries Per User"
-                name="max_entries_per_user"
-                type="number"
-                min={1}
-                value={form.max_entries_per_user}
+            <div>
+              <label className="block text-sm font-medium text-dark-300 mb-1">
+                Category *
+              </label>
+              <select
+                name="category"
+                value={form.category}
                 onChange={handleChange}
-              />
+                className="w-full px-4 py-2 bg-dark-800 border border-dark-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {CATEGORIES.map(cat => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         </Card>
 
-        {/* Cover Image */}
+        {/* Thumbnail Image */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <Image className="w-5 h-5 text-primary-500" />
-            Cover Image
+            Thumbnail Image
           </h2>
           <Input
-            label="Cover Image URL"
-            name="cover_image_url"
-            value={form.cover_image_url}
+            label="Thumbnail URL"
+            name="thumbnail_url"
+            value={form.thumbnail_url}
             onChange={handleChange}
             placeholder="https://example.com/image.jpg"
           />
-          {form.cover_image_url && (
+          {form.thumbnail_url && (
             <div className="mt-4">
               <img
-                src={form.cover_image_url}
-                alt="Cover preview"
+                src={form.thumbnail_url}
+                alt="Thumbnail preview"
                 className="w-full max-w-md h-48 object-cover rounded-lg"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none'
@@ -302,78 +281,69 @@ export default function AdminContestFormPage() {
           </div>
         </Card>
 
-        {/* Prizes */}
+        {/* Prize System Info */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-primary-500" />
-            Prizes (Points)
+            <Info className="w-5 h-5 text-primary-500" />
+            Prize System
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input
-              label="Total Prize Pool"
-              name="prize_pool"
-              type="number"
-              min={0}
-              value={form.prize_pool}
-              onChange={handleChange}
-            />
-            <Input
-              label="1st Place"
-              name="first_place_prize"
-              type="number"
-              min={0}
-              value={form.first_place_prize}
-              onChange={handleChange}
-            />
-            <Input
-              label="2nd Place"
-              name="second_place_prize"
-              type="number"
-              min={0}
-              value={form.second_place_prize}
-              onChange={handleChange}
-            />
-            <Input
-              label="3rd Place"
-              name="third_place_prize"
-              type="number"
-              min={0}
-              value={form.third_place_prize}
-              onChange={handleChange}
-            />
+          <div className="bg-dark-800 rounded-lg p-4 border border-dark-700">
+            <p className="text-dark-300 mb-3">
+              Prizes are <span className="text-primary-400 font-medium">automatically calculated</span> based on reactions (votes) when the contest ends:
+            </p>
+            <ul className="space-y-2 text-dark-400">
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                <span><strong className="text-yellow-400">1st Place:</strong> 50% of total reactions from top 3 entries</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                <span><strong className="text-gray-300">2nd Place:</strong> 20% of total reactions from top 3 entries</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-amber-600 rounded-full"></span>
+                <span><strong className="text-amber-500">3rd Place:</strong> 10% of total reactions from top 3 entries</span>
+              </li>
+            </ul>
+            <p className="text-dark-500 text-sm mt-3">
+              Winners are determined by the number of reactions their entries receive. Each reaction = 1 vote = 1 point in the prize pool.
+            </p>
           </div>
         </Card>
 
-        {/* Guidelines */}
+        {/* Sponsor (Optional) */}
         <Card className="p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Guidelines & Criteria</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Sponsor (Optional)</h2>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-dark-300 mb-1">
-                Submission Guidelines
-              </label>
-              <textarea
-                name="submission_guidelines"
-                value={form.submission_guidelines}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="has_sponsor"
+                checked={form.has_sponsor}
                 onChange={handleChange}
-                rows={3}
-                className="w-full px-4 py-2 bg-dark-800 border border-dark-700 rounded-lg text-white placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Rules and requirements for submissions..."
+                className="w-4 h-4 rounded border-dark-600 bg-dark-800 text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-dark-300 mb-1">
-                Judging Criteria
-              </label>
-              <textarea
-                name="judging_criteria"
-                value={form.judging_criteria}
-                onChange={handleChange}
-                rows={3}
-                className="w-full px-4 py-2 bg-dark-800 border border-dark-700 rounded-lg text-white placeholder-dark-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="How entries will be judged..."
-              />
-            </div>
+              <span className="text-dark-300">This contest has a sponsor</span>
+            </label>
+
+            {form.has_sponsor && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <Input
+                  label="Sponsor Name"
+                  name="sponsor_name"
+                  value={form.sponsor_name}
+                  onChange={handleChange}
+                  placeholder="Sponsor company name"
+                />
+                <Input
+                  label="Sponsor Logo URL"
+                  name="sponsor_logo_url"
+                  value={form.sponsor_logo_url}
+                  onChange={handleChange}
+                  placeholder="https://example.com/logo.png"
+                />
+              </div>
+            )}
           </div>
         </Card>
 
