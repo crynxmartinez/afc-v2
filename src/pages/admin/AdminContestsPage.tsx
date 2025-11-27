@@ -24,6 +24,7 @@ export default function AdminContestsPage() {
 
   const fetchContests = async () => {
     try {
+      // @ts-ignore - Supabase types not generated
       const { data, error } = await supabase
         .from('contests')
         .select('*')
@@ -31,7 +32,7 @@ export default function AdminContestsPage() {
 
       if (error) throw error
 
-      const contestsWithStatus = (data || []).map(contest => ({
+      const contestsWithStatus = ((data || []) as any[]).map(contest => ({
         ...contest,
         status: getContestStatus(contest.start_date, contest.end_date, contest.finalized_at)
       }))
@@ -69,6 +70,7 @@ export default function AdminContestsPage() {
 
   const handleFinalize = async (contestId: string) => {
     try {
+      // @ts-ignore - Supabase types not generated
       const { error } = await supabase.rpc('finalize_contest_and_select_winners', {
         p_contest_id: contestId
       })
