@@ -63,25 +63,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state change:', event)
         
+        // Skip INITIAL_SESSION as we already handle it above
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+        
         if (event === 'SIGNED_IN' && session?.user) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
+          try {
+            // @ts-ignore - Supabase types not generated
+            const { data: profile, error } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single()
 
-          if (profile) {
-            set({
-              user: profile,
-              isAuthenticated: true,
-              isAdmin: profile.role === 'admin',
-            })
+            console.log('SIGNED_IN profile fetch:', { profile, error })
+
+            if (profile) {
+              set({
+                user: profile,
+                isAuthenticated: true,
+                isAdmin: (profile as any).role === 'admin',
+                isLoading: false,
+              })
+            } else {
+              // Profile not found, user might need to wait for trigger
+              console.warn('Profile not found for user:', session.user.id)
+              set({ isLoading: false })
+            }
+          } catch (err) {
+            console.error('Error fetching profile on SIGNED_IN:', err)
+            set({ isLoading: false })
           }
         } else if (event === 'SIGNED_OUT') {
           set({
             user: null,
             isAuthenticated: false,
             isAdmin: false,
+            isLoading: false,
           })
         } else if (event === 'TOKEN_REFRESHED') {
           // Token was refreshed, session is still valid
@@ -89,17 +108,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } else if (event === 'USER_UPDATED') {
           // User data was updated
           if (session?.user) {
-            const { data: profile } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', session.user.id)
-              .single()
+            try {
+              // @ts-ignore - Supabase types not generated
+              const { data: profile } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .single()
 
-            if (profile) {
-              set({
-                user: profile,
-                isAdmin: profile.role === 'admin',
-              })
+              if (profile) {
+                set({
+                  user: profile,
+                  isAdmin: (profile as any).role === 'admin',
+                })
+              }
+            } catch (err) {
+              console.error('Error fetching profile on USER_UPDATED:', err)
             }
           }
         }
