@@ -3,10 +3,11 @@
 -- Run this in Supabase SQL Editor
 -- =====================================================
 
--- Step 1: Create the auth user
--- This creates the user in auth.users and triggers the handle_new_user function
--- which automatically creates the public.users record
+-- Delete existing admin if exists (clean slate)
+DELETE FROM public.users WHERE email = 'admin@afc.com';
+DELETE FROM auth.users WHERE email = 'admin@afc.com';
 
+-- Create the auth user
 INSERT INTO auth.users (
   id,
   instance_id,
@@ -37,7 +38,7 @@ INSERT INTO auth.users (
   ''
 );
 
--- Step 2: Update the user to be admin
+-- Update the user to be admin
 -- (The trigger should have created the public.users record)
 UPDATE public.users 
 SET 
