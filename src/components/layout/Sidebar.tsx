@@ -2,7 +2,6 @@ import { NavLink } from 'react-router-dom'
 import { 
   Home, 
   Trophy, 
-  Users, 
   Award, 
   BarChart3,
   Settings,
