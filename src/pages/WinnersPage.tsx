@@ -12,7 +12,7 @@ interface Winner {
   placement: number
   reactions_count: number
   prize_amount: number
-  created_at: string
+  awarded_at: string
   contest: {
     id: string
     title: string
@@ -48,12 +48,12 @@ export default function WinnersPage() {
           placement,
           reactions_count,
           prize_amount,
-          created_at,
+          awarded_at,
           contest:contests(id, title, category),
           entry:entries(id, title, phase_1_url),
           user:users(id, username, display_name, avatar_url)
         `)
-        .order('created_at', { ascending: false })
+        .order('awarded_at', { ascending: false })
         .limit(50)
 
       if (error) throw error
@@ -144,7 +144,7 @@ function WinnerCard({ winner }: { winner: Winner }) {
           </div>
           <div className="flex items-center gap-1 text-dark-400">
             <Calendar className="w-4 h-4" />
-            {formatDate(winner.created_at)}
+            {formatDate(winner.awarded_at)}
           </div>
         </div>
 
