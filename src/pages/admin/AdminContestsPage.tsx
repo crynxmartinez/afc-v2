@@ -178,7 +178,7 @@ export default function AdminContestsPage() {
                               Finalize
                             </Button>
                           )}
-                          <Link to={`/admin/contests/${contest.id}/edit`}>
+                          <Link to={`/admin/contests/edit/${contest.id}`}>
                             <Button size="sm" variant="ghost">
                               <Edit className="w-4 h-4" />
                             </Button>

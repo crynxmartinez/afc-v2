@@ -32,6 +32,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminContestsPage from './pages/admin/AdminContestsPage'
 import AdminEntriesPage from './pages/admin/AdminEntriesPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
+import AdminContestFormPage from './pages/admin/AdminContestFormPage'
 
 // Route Guards
 import ProtectedRoute from './components/auth/ProtectedRoute'
@@ -89,6 +90,8 @@ function App() {
           <Route element={<AdminRoute />}>
             <Route path="admin" element={<AdminDashboardPage />} />
             <Route path="admin/contests" element={<AdminContestsPage />} />
+            <Route path="admin/contests/create" element={<AdminContestFormPage />} />
+            <Route path="admin/contests/edit/:id" element={<AdminContestFormPage />} />
             <Route path="admin/entries" element={<AdminEntriesPage />} />
             <Route path="admin/users" element={<AdminUsersPage />} />
           </Route>
