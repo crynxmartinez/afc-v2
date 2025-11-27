@@ -13,8 +13,34 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    storageKey: 'afc-auth',
+  },
+  global: {
+    headers: {
+      'x-application-name': 'afc-v2',
+    },
   },
 })
+
+// Check if session is valid, refresh if needed
+export const ensureValidSession = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession()
+  
+  if (error || !session) {
+    // Session is invalid, try to refresh
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+    
+    if (refreshError || !refreshData.session) {
+      // Refresh failed, user needs to login again
+      console.warn('Session expired, please login again')
+      return null
+    }
+    
+    return refreshData.session
+  }
+  
+  return session
+}
 
 // Helper to get current user
 export const getCurrentUser = async () => {

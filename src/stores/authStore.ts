@@ -61,6 +61,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Listen for auth changes
       supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('Auth state change:', event)
+        
         if (event === 'SIGNED_IN' && session?.user) {
           const { data: profile } = await supabase
             .from('users')
@@ -81,6 +83,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isAuthenticated: false,
             isAdmin: false,
           })
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Token was refreshed, session is still valid
+          console.log('Token refreshed successfully')
+        } else if (event === 'USER_UPDATED') {
+          // User data was updated
+          if (session?.user) {
+            const { data: profile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single()
+
+            if (profile) {
+              set({
+                user: profile,
+                isAdmin: profile.role === 'admin',
+              })
+            }
+          }
         }
       })
     } catch (error) {

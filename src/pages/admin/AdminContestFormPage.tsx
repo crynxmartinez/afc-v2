@@ -119,35 +119,63 @@ export default function AdminContestFormPage() {
     setIsSaving(true)
 
     try {
+      // Store datetime as PH time (UTC+8) - append timezone offset
+      const formatAsPHTime = (datetime: string) => {
+        // datetime-local gives us "2025-11-28T10:00"
+        // We append +08:00 to indicate PH timezone
+        return `${datetime}:00+08:00`
+      }
+
       const contestData = {
         title: form.title,
         description: form.description || null,
         category: form.category,
         thumbnail_url: form.thumbnail_url || null,
-        start_date: new Date(form.start_date).toISOString(),
-        end_date: new Date(form.end_date).toISOString(),
+        start_date: formatAsPHTime(form.start_date),
+        end_date: formatAsPHTime(form.end_date),
         has_sponsor: form.has_sponsor,
         sponsor_name: form.has_sponsor ? form.sponsor_name : null,
         sponsor_logo_url: form.has_sponsor ? form.sponsor_logo_url : null,
         created_by: user?.id
       }
 
+      console.log('=== DEBUG: Contest Creation ===')
+      console.log('User:', user)
+      console.log('User ID:', user?.id)
+      console.log('Contest Data:', contestData)
+
       if (isEditing && id) {
-        const { error } = await supabase
+        console.log('Mode: EDITING contest', id)
+        const { data, error } = await supabase
           .from('contests')
           // @ts-ignore - Supabase types not generated
           .update(contestData as any)
           .eq('id', id)
+          .select()
+
+        console.log('Update Response - Data:', data)
+        console.log('Update Response - Error:', error)
 
         if (error) throw error
+        if (!data || data.length === 0) {
+          throw new Error('Update failed - no data returned (possibly RLS blocked)')
+        }
         toast.success('Contest updated successfully')
       } else {
-        const { error } = await supabase
+        console.log('Mode: CREATING new contest')
+        const { data, error } = await supabase
           .from('contests')
           // @ts-ignore - Supabase types not generated
           .insert(contestData as any)
+          .select()
+
+        console.log('Insert Response - Data:', data)
+        console.log('Insert Response - Error:', error)
 
         if (error) throw error
+        if (!data || data.length === 0) {
+          throw new Error('Insert failed - no data returned (possibly RLS blocked)')
+        }
         toast.success('Contest created successfully')
       }
 
