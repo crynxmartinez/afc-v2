@@ -33,12 +33,13 @@ export default function EntryDetailPage() {
   const fetchEntry = async () => {
     try {
       // Fetch entry with user and contest
+      // @ts-ignore - Supabase types not generated
       const { data: entryData, error: entryError } = await supabase
         .from('entries')
         .select(`
           *,
           user:users(id, username, display_name, avatar_url),
-          contest:contests(id, title, status)
+          contest:contests(id, title, start_date, end_date, finalized_at)
         `)
         .eq('id', id)
         .single()
