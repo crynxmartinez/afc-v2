@@ -65,6 +65,7 @@ export default function AdminEntriesPage() {
     try {
       const { error } = await supabase
         .from('entries')
+        // @ts-ignore - Supabase types not generated yet
         .update({ status: 'approved', rejection_reason: null })
         .eq('id', entryId)
 
@@ -84,6 +85,7 @@ export default function AdminEntriesPage() {
     try {
       const { error } = await supabase
         .from('entries')
+        // @ts-ignore - Supabase types not generated yet
         .update({ status: 'rejected', rejection_reason: rejectionReason || null })
         .eq('id', entryId)
 

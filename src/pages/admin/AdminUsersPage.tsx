@@ -45,6 +45,7 @@ export default function AdminUsersPage() {
     try {
       const { error } = await supabase
         .from('users')
+        // @ts-ignore - Supabase types not generated yet
         .update({ role: newRole })
         .eq('id', userId)
 
