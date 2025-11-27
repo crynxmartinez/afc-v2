@@ -133,19 +133,19 @@ export default function AdminContestFormPage() {
       }
 
       if (isEditing && id) {
-        // @ts-ignore - Supabase types not generated
         const { error } = await supabase
           .from('contests')
-          .update(contestData)
+          // @ts-ignore - Supabase types not generated
+          .update(contestData as any)
           .eq('id', id)
 
         if (error) throw error
         toast.success('Contest updated successfully')
       } else {
-        // @ts-ignore - Supabase types not generated
         const { error } = await supabase
           .from('contests')
-          .insert(contestData)
+          // @ts-ignore - Supabase types not generated
+          .insert(contestData as any)
 
         if (error) throw error
         toast.success('Contest created successfully')
