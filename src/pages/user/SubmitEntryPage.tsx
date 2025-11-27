@@ -10,12 +10,39 @@ import Button from '@/components/ui/Button'
 import { PageSpinner } from '@/components/ui/Spinner'
 import type { Contest } from '@/types'
 
-const PHASES = [
-  { num: 1, label: 'Sketch', description: 'Initial sketch or concept', required: true },
-  { num: 2, label: 'Lineart', description: 'Clean linework', required: false },
-  { num: 3, label: 'Color', description: 'Base colors applied', required: false },
-  { num: 4, label: 'Final', description: 'Finished artwork', required: false },
-]
+// Phase configurations per category
+const PHASE_CONFIG: Record<string, { num: number; label: string; description: string; required: boolean }[]> = {
+  // Art categories - 4 phases
+  art: [
+    { num: 1, label: 'Sketch', description: 'Initial sketch or concept', required: true },
+    { num: 2, label: 'Lineart', description: 'Clean linework', required: false },
+    { num: 3, label: 'Color', description: 'Base colors applied', required: false },
+    { num: 4, label: 'Final', description: 'Finished artwork', required: true },
+  ],
+  // Cosplay - 2 phases
+  cosplay: [
+    { num: 1, label: 'Work in Progress', description: 'Behind the scenes, making of, or costume construction', required: true },
+    { num: 2, label: 'Final Cosplay', description: 'Finished cosplay photo', required: true },
+  ],
+  // Photography - 2 phases (raw + edited)
+  photography: [
+    { num: 1, label: 'Original/RAW', description: 'Original or unedited photo', required: true },
+    { num: 2, label: 'Final Edit', description: 'Final edited photo', required: true },
+  ],
+  // Music - 2 phases (demo + final)
+  music: [
+    { num: 1, label: 'Demo/Draft', description: 'Work in progress or demo version', required: true },
+    { num: 2, label: 'Final Track', description: 'Finished music piece', required: true },
+  ],
+  // Video - 2 phases (raw + edited)
+  video: [
+    { num: 1, label: 'Raw Footage', description: 'Unedited footage or storyboard', required: true },
+    { num: 2, label: 'Final Video', description: 'Finished and edited video', required: true },
+  ],
+}
+
+// Default fallback (4 phases like art)
+const DEFAULT_PHASES = PHASE_CONFIG.art
 
 export default function SubmitEntryPage() {
   const { contestId } = useParams()
@@ -30,10 +57,15 @@ export default function SubmitEntryPage() {
   // Form state
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [phases, setPhases] = useState<{ [key: number]: File | null }>({
+  const [phaseFiles, setPhaseFiles] = useState<{ [key: number]: File | null }>({
     1: null, 2: null, 3: null, 4: null
   })
   const [previews, setPreviews] = useState<{ [key: number]: string }>({})
+
+  // Get phases based on contest category
+  const categoryPhases = contest?.category 
+    ? (PHASE_CONFIG[contest.category] || DEFAULT_PHASES)
+    : DEFAULT_PHASES
 
   useEffect(() => {
     if (contestId) {
@@ -74,7 +106,7 @@ export default function SubmitEntryPage() {
   }
 
   const handleFileChange = (phaseNum: number, file: File | null) => {
-    setPhases(prev => ({ ...prev, [phaseNum]: file }))
+    setPhaseFiles(prev => ({ ...prev, [phaseNum]: file }))
 
     // Create preview
     if (file) {
@@ -108,7 +140,15 @@ export default function SubmitEntryPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !contest || !phases[1]) return
+    
+    // Check required phases based on category
+    const requiredPhases = categoryPhases.filter(p => p.required)
+    const missingRequired = requiredPhases.some(p => !phaseFiles[p.num])
+    
+    if (!user || !contest || missingRequired) {
+      toast.error('Missing required phases', 'Please upload all required phase images.')
+      return
+    }
 
     setIsSubmitting(true)
     try {
@@ -117,7 +157,7 @@ export default function SubmitEntryPage() {
       const uploadedUrls: { [key: number]: string | null } = {}
 
       for (const phaseNum of [1, 2, 3, 4]) {
-        const file = phases[phaseNum]
+        const file = phaseFiles[phaseNum]
         if (file) {
           const path = `${user.id}/${contest.id}/${timestamp}_phase${phaseNum}.${file.name.split('.').pop()}`
           uploadedUrls[phaseNum] = await uploadImage(file, path)
@@ -127,6 +167,7 @@ export default function SubmitEntryPage() {
       }
 
       // Create entry
+      // @ts-ignore - Supabase types not generated
       const { error } = await supabase
         .from('entries')
         .insert({
@@ -228,17 +269,33 @@ export default function SubmitEntryPage() {
 
         {/* Phases */}
         <Card>
-          <h2 className="font-semibold text-white mb-4">Artwork Phases</h2>
+          <h2 className="font-semibold text-white mb-4">
+            {contest.category === 'cosplay' ? 'Cosplay Phases' : 
+             contest.category === 'photography' ? 'Photo Phases' :
+             contest.category === 'music' ? 'Music Phases' :
+             contest.category === 'video' ? 'Video Phases' :
+             'Artwork Phases'}
+          </h2>
           <p className="text-dark-400 text-sm mb-6">
-            Upload your artwork in phases to show your creative process. At least Phase 1 (Sketch) is required.
+            {contest.category === 'art' 
+              ? 'Upload your artwork in phases to show your creative process. Sketch and Final are required.'
+              : contest.category === 'cosplay'
+              ? 'Upload your work-in-progress and final cosplay photos. Both phases are required.'
+              : contest.category === 'photography'
+              ? 'Upload your original/RAW photo and final edited version. Both are required.'
+              : contest.category === 'music'
+              ? 'Upload your demo/draft and final track. Both are required.'
+              : contest.category === 'video'
+              ? 'Upload your raw footage/storyboard and final video. Both are required.'
+              : 'Upload your work in phases. Required phases are marked with *.'}
           </p>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            {PHASES.map((phase) => (
+          <div className={`grid gap-4 ${categoryPhases.length <= 2 ? 'md:grid-cols-2' : 'md:grid-cols-2'}`}>
+            {categoryPhases.map((phase) => (
               <PhaseUpload
                 key={phase.num}
                 phase={phase}
-                file={phases[phase.num]}
+                file={phaseFiles[phase.num]}
                 preview={previews[phase.num]}
                 onChange={(file) => handleFileChange(phase.num, file)}
               />
@@ -254,7 +311,7 @@ export default function SubmitEntryPage() {
           <Button 
             type="submit" 
             isLoading={isSubmitting}
-            disabled={!phases[1]}
+            disabled={categoryPhases.filter(p => p.required).some(p => !phaseFiles[p.num])}
           >
             Submit Entry
           </Button>
