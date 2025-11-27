@@ -3,23 +3,21 @@
 -- Run this FIRST to clean everything before FULL-SCHEMA.sql
 -- =====================================================
 
--- Drop all storage policies first (they cause conflicts)
-DROP POLICY IF EXISTS "Avatar images public" ON storage.objects;
-DROP POLICY IF EXISTS "Users upload avatars" ON storage.objects;
-DROP POLICY IF EXISTS "Users update own avatar" ON storage.objects;
-DROP POLICY IF EXISTS "Users delete own avatar" ON storage.objects;
-DROP POLICY IF EXISTS "Entry images public" ON storage.objects;
-DROP POLICY IF EXISTS "Users upload entries" ON storage.objects;
-DROP POLICY IF EXISTS "Users update own entries" ON storage.objects;
-DROP POLICY IF EXISTS "Users delete own entries" ON storage.objects;
-DROP POLICY IF EXISTS "Contest images public" ON storage.objects;
-DROP POLICY IF EXISTS "Admins upload contest images" ON storage.objects;
-DROP POLICY IF EXISTS "Admins update contest images" ON storage.objects;
-DROP POLICY IF EXISTS "Admins delete contest images" ON storage.objects;
+-- Drop ALL storage policies on storage.objects (nuclear option)
+DO $$ 
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN 
+    SELECT policyname FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', pol.policyname);
+  END LOOP;
+END $$;
 
 -- Drop storage buckets
-DELETE FROM storage.objects WHERE bucket_id IN ('avatars', 'entries', 'contests');
-DELETE FROM storage.buckets WHERE id IN ('avatars', 'entries', 'contests');
+DELETE FROM storage.objects WHERE bucket_id IN ('avatars', 'entries', 'contests', 'covers', 'sponsors');
+DELETE FROM storage.buckets WHERE id IN ('avatars', 'entries', 'contests', 'covers', 'sponsors');
 
 -- Drop public schema and recreate
 DROP SCHEMA IF EXISTS public CASCADE;
