@@ -48,6 +48,7 @@ export default function EntryDetailPage() {
       setEntry(entryData)
 
       // Fetch comments
+      // @ts-ignore - Supabase types not generated
       const { data: commentsData } = await supabase
         .from('comments')
         .select('*, user:users(id, username, display_name, avatar_url)')
@@ -58,6 +59,7 @@ export default function EntryDetailPage() {
 
       // Check user's reaction
       if (user) {
+        // @ts-ignore - Supabase types not generated
         const { data: reactionData } = await supabase
           .from('reactions')
           .select('reaction_type')
@@ -65,7 +67,7 @@ export default function EntryDetailPage() {
           .eq('user_id', user.id)
           .single()
 
-        setUserReaction(reactionData?.reaction_type || null)
+        setUserReaction((reactionData as any)?.reaction_type || null)
       }
     } catch (error) {
       console.error('Error fetching entry:', error)
@@ -92,14 +94,16 @@ export default function EntryDetailPage() {
           // Update reaction
           await supabase
             .from('reactions')
-            .update({ reaction_type: reactionType })
+            // @ts-ignore - Supabase types not generated
+            .update({ reaction_type: reactionType } as any)
             .eq('entry_id', entry.id)
             .eq('user_id', user.id)
         } else {
           // Add reaction
           await supabase
             .from('reactions')
-            .insert({ entry_id: entry.id, user_id: user.id, reaction_type: reactionType })
+            // @ts-ignore - Supabase types not generated
+            .insert({ entry_id: entry.id, user_id: user.id, reaction_type: reactionType } as any)
           setEntry(prev => prev ? { ...prev, reactions_count: prev.reactions_count + 1 } : null)
         }
         setUserReaction(reactionType)
@@ -117,7 +121,8 @@ export default function EntryDetailPage() {
     try {
       const { data, error } = await supabase
         .from('comments')
-        .insert({ entry_id: entry.id, user_id: user.id, content: newComment.trim() })
+        // @ts-ignore - Supabase types not generated
+        .insert({ entry_id: entry.id, user_id: user.id, content: newComment.trim() } as any)
         .select('*, user:users(id, username, display_name, avatar_url)')
         .single()
 

@@ -36,6 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (session?.user) {
         // Fetch user profile from public.users
+        // @ts-ignore - Supabase types not generated
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
@@ -47,7 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
           user: profile,
           isAuthenticated: true,
-          isAdmin: profile.role === 'admin',
+          isAdmin: (profile as any).role === 'admin',
           isLoading: false,
         })
       } else {
@@ -163,7 +164,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
           user: profile,
           isAuthenticated: true,
-          isAdmin: profile.role === 'admin',
+          isAdmin: (profile as any).role === 'admin',
           isLoading: false,
         })
 
@@ -282,7 +283,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const { data: updatedProfile, error } = await supabase
         .from('users')
-        .update(data)
+        // @ts-ignore - Supabase types not generated
+        .update(data as any)
         .eq('id', user.id)
         .select()
         .single()
@@ -317,7 +319,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({
         user: profile,
-        isAdmin: profile.role === 'admin',
+        isAdmin: (profile as any).role === 'admin',
       })
     } catch (error) {
       console.error('Refresh user error:', error)
